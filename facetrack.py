@@ -15,10 +15,11 @@ class FaceTrack(object):
         self.faces = []
         self.img = None
         self.debug = False
-        self.cam = VideoCapture(0)
+        self.cam = VideoCapture(1)
         self.cam.set(3,640)
         self.cam.set(4,640)
         self.averageStraight = (0,0,0,0)
+        self.lastFace = []
 
     def setDebug(self, val):
         self.debug = val
@@ -39,6 +40,7 @@ class FaceTrack(object):
         return self.cam
 
     def detectFace(self):
+        old = self.faces
         self.captureImage()
         gray = cvtColor(self.img, COLOR_BGR2GRAY)
         self.faces = self.face_cascade.detectMultiScale(
@@ -47,6 +49,20 @@ class FaceTrack(object):
             minNeighbors=5,
             minSize=(30, 30)
         )
+        if len(self.faces) > 0:
+            self.lastFace = old
+        if len(self.faces) > 1 and len(old) > 0:
+            maxDiff = 999
+            choice = 0
+            for i, face in enumerate(self.faces):
+                diff = abs(face[0]-old[0][0])
+                if diff < maxDiff:
+                    maxDiff = diff
+                    choice = i
+            self.faces = [self.faces[choice]]
+        if len(old) > 0 and len(self.faces) > 0:
+            if abs(self.faces[0][2] - old[0][2]) > 60:
+                self.faces = []
         for (x,y,w,h) in self.faces:
             rectangle(self.img,(x,y),(x+w,y+h),(255,0,0),2)
             if self.averageStraight != (0,0,0,0):
@@ -103,8 +119,8 @@ class FaceTrack(object):
 
     def suggest(self, sens):
         self.detectFace()
-        while len(self.faces) != 1:
-            self.detectFace()
+        if len(self.faces) < 1 and self.lastFace != []:
+            self.faces = self.lastFace
         mid = self.faces[0][1]+0.5*self.faces[0][3]
         if abs(self.avgMid - mid) >= sens:
             if self.avgMid > mid:
@@ -142,9 +158,6 @@ class FaceTrack(object):
         print('faces:')
         for face in self.faces:
             print('\t{}'.format(face))
-        print('eyes:')
-        for eye in self.eyes:
-            print('\t{}'.format(eye))
 
     def printAverages(self):
         print('straight:')
